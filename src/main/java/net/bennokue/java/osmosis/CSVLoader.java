@@ -37,6 +37,9 @@ public class CSVLoader {
     private long lineNumber;
     private long inputLineCount;
     private int runsThroughFile;
+    private long marked_line;
+    private int marked_runThroughFile;
+    private boolean passedMark;
 
     public CSVLoader(File csvInputFile, int cacheSize, int osmIdPos, int osmLatPos, int osmLonPos, int tagDataPos) throws FileNotFoundException {
         this.csvInputFile = csvInputFile;
@@ -62,6 +65,22 @@ public class CSVLoader {
             }
         }
     }
+    
+    private void markLine() {
+        this.marked_line = this.lineNumber;
+        this.marked_runThroughFile = this.runsThroughFile;
+        this.passedMark = false;
+    }
+    
+    private void updateMark() {
+        if (this.runsThroughFile == this.marked_runThroughFile + 1 && this.lineNumber == this.marked_line) {
+            this.passedMark = true;
+            return;
+        }
+        if (this.runsThroughFile > this.marked_line + 1) {
+            this.passedMark = true;
+        }
+    }
 
     private String readLine() throws IOException {
         String line = this.bufferedReader.readLine();
@@ -74,6 +93,7 @@ public class CSVLoader {
             throw new IOException("CSV file seems to be empty");
         }
         this.lineNumber++;
+        this.updateMark();
         return line;
     }
 
@@ -137,7 +157,8 @@ public class CSVLoader {
         logger.log(Level.FINEST, "Cache miss {0}", id);
         int currentRunThroughFile = this.runsThroughFile;
         long currentLineNumber = this.lineNumber;
-        while (null == item && (this.runsThroughFile <= currentRunThroughFile || this.lineNumber < currentLineNumber)) {
+        this.markLine();
+        while (null == item && !this.passedMark) {
             this.cache.clear();
             this.fillCache();
             item = this.cache.get(id);
