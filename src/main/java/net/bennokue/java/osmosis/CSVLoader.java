@@ -21,6 +21,7 @@ import java.util.logging.Logger;
  * @author bennokue
  */
 public class CSVLoader {
+
     private static final Logger logger = Logger.getLogger(CSVLoader.class.getName());
 
     private final File csvInputFile;
@@ -56,10 +57,12 @@ public class CSVLoader {
         for (int i = 0; i <= (this.cacheSize - this.cache.size()); i++) {
             String line = this.readLine();
             CSVItem currentItem = this.parseCSVItem(line);
-            this.cache.put(currentItem.OSM_ID, currentItem);
+            if (null != currentItem) {
+                this.cache.put(currentItem.OSM_ID, currentItem);
+            }
         }
     }
-    
+
     private String readLine() throws IOException {
         String line = this.bufferedReader.readLine();
         if (null == line) {
@@ -73,7 +76,7 @@ public class CSVLoader {
         this.lineNumber++;
         return line;
     }
-    
+
     private void resetReaders() throws IOException {
         logger.log(Level.FINER, "Resetting readers");
         // Close
@@ -87,9 +90,10 @@ public class CSVLoader {
         this.inputLineCount = Math.max(this.inputLineCount, this.lineNumber);
         this.lineNumber = 1;
     }
-    
+
     private CSVItem parseCSVItem(String line) {
         if (line.equals("")) {
+            logger.log(Level.FINE, "Empty line: {0}", this.lineNumber);
             return null;
         }
         String[] lineChunks = line.split(",");
@@ -98,20 +102,30 @@ public class CSVLoader {
             return null;
         }
         // Read the id
-        long osmId = Long.parseLong(lineChunks[this.osmIdPos-1]);
+        long osmId = -1;
+        try {
+            osmId = Long.parseLong(lineChunks[this.osmIdPos - 1]);
+        } catch (NumberFormatException e) {
+            logger.log(Level.WARNING, "Mal-formed line (id): " + this.lineNumber, e);
+            return null;
+        }
         // Read the data
-        String tagData = lineChunks[this.tagDataPos-1];
+        String tagData = lineChunks[this.tagDataPos - 1];
         // Read lon and lat
         double longitude = Double.NaN;
         double latitude = Double.NaN;
         if (this.osmLatPos > 0 && this.osmLonPos > 0) {
-            latitude = Double.parseDouble(lineChunks[this.osmLatPos-1]);
-            longitude = Double.parseDouble(lineChunks[this.osmLonPos-1]);
+            try {
+                latitude = Double.parseDouble(lineChunks[this.osmLatPos - 1]);
+                longitude = Double.parseDouble(lineChunks[this.osmLonPos - 1]);
+            } catch (NumberFormatException e) {
+                logger.log(Level.WARNING, "Mal-formed line (lat/lon): " + this.lineNumber, e);
+            }
         }
         CSVItem item = new CSVItem(osmId, latitude, longitude, tagData);
         return item;
     }
-    
+
     public CSVItem findItem(long id) throws IOException {
         // Lookup in the cache
         CSVItem item = this.cache.get(id);
@@ -120,13 +134,19 @@ public class CSVLoader {
             return item;
         }
         // Search the item
-        logger.log(Level.FINEST, "Searching {0}", id);
+        logger.log(Level.FINEST, "Cache miss {0}", id);
         int currentRunThroughFile = this.runsThroughFile;
         long currentLineNumber = this.lineNumber;
         while (null == item && (this.runsThroughFile <= currentRunThroughFile || this.lineNumber < currentLineNumber)) {
             this.cache.clear();
             this.fillCache();
             item = this.cache.get(id);
+        }
+        if (null == item) {
+            logger.log(Level.FINE, "Could not find osm id {0}", id);
+        }
+        else {
+            logger.log(Level.FINEST, "Cache hit");
         }
         return item;    // null or the item
     }
