@@ -84,11 +84,11 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
         if (this.outputTag.equals("")) {
             throw new IllegalArgumentException("Please provide an outputTag");
         }
-        
-        if (this.maxNodeDistance < Double.POSITIVE_INFINITY && (this.osmLatitudeCSVPosition < 0 || this.osmLongitudeCSVPosition <0)) {
+
+        if (this.maxNodeDistance < Double.POSITIVE_INFINITY && (this.osmLatitudeCSVPosition < 0 || this.osmLongitudeCSVPosition < 0)) {
             throw new IllegalArgumentException("Provide latPos and lonPos when using maxDist");
         }
-        
+
         try {
             this.csvLoader = new CSVLoader(this.inputCSV, csvCacheSize, osmIdPos, osmLatPos, osmLonPos, dataPos);
         } catch (FileNotFoundException ex) {
@@ -96,7 +96,7 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
             logger.log(Level.SEVERE, null, ex);
             System.exit(1);
         }
-        
+
     }
 
     @Override
@@ -133,8 +133,10 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
         // Get the output value 
         String outputTagValue = this.getNodeTagValue(osmId, lat, lon);
 
-        // Add new output tag
-        nodeTags.add(new Tag(this.outputTag, outputTagValue));
+        // Add new output tag if it is there
+        if (null != outputTagValue && !outputTagValue.equals("")) {
+            nodeTags.add(new Tag(this.outputTag, outputTagValue));
+        }
 
         // Create new node entity with adjusted attributes
         CommonEntityData ced = new CommonEntityData(
@@ -148,7 +150,7 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
         // Distribute the new nodecontainer to the following sink
         sink.process(new NodeContainer(new Node(ced, lat, lon)));
     }
-    
+
     private String getNodeTagValue(long osmId, double lat, double lon) {
         // Look for the item
         CSVItem item = null;
@@ -164,13 +166,12 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
         double distance = item.getDistance(lat, lon);
         if (distance > this.maxNodeDistance) {
             if (this.maxDistAction == MaxDistAction.DELETE) {
+                logger.log(Level.WARNING, "Node {0} has distance {1} to the point where it should be! We do not import it.", new Object[]{osmId, distance});
                 return "";
-            }
-            else if (this.maxDistAction == MaxDistAction.WARN) {
+            } else if (this.maxDistAction == MaxDistAction.WARN) {
                 logger.log(Level.WARNING, "Node {0} has distance {1} to the point where it should be!", new Object[]{osmId, distance});
                 return item.DATA;
-            }
-            else {
+            } else {
                 throw new IllegalArgumentException("Unknown action: " + this.maxDistAction.toString());
             }
         }

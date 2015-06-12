@@ -92,7 +92,7 @@ public class CSVLoader {
     }
 
     private CSVItem parseCSVItem(String line) {
-        if (line.equals("")) {
+        if (line.equals("") || line.startsWith(";")) {
             logger.log(Level.FINE, "Empty line: {0}", this.lineNumber);
             return null;
         }

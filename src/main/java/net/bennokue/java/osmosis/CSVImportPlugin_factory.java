@@ -42,7 +42,7 @@ public class CSVImportPlugin_factory extends TaskManagerFactory {
     private static final String ARG_INPUT_CSV = "inputCSV";
     private static final String DEFAULT_INPUT_CSV = "";
     private static final String ARG_CSV_CACHE_SIZE = "csvCacheSize";
-    private static final int DEFAULT_CSV_CACHE_SIZE = 10000;
+    private static final int DEFAULT_CSV_CACHE_SIZE = 5000;
 
     @Override
     protected TaskManager createTaskManagerImpl(TaskConfiguration taskConfig) {
