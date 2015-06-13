@@ -1,25 +1,15 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
-/* TODO Benno Javadoc */
 package net.bennokue.java.osmosis;
 
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Calendar;
-import java.util.Date;
 import java.util.HashSet;
-import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
-import java.util.logging.LogManager;
 import java.util.logging.Logger;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.xpath.XPathExpressionException;
@@ -35,6 +25,8 @@ import org.openstreetmap.osmosis.xml.v0_6.XmlWriter;
 import org.xml.sax.SAXException;
 
 /**
+ * Test class. Also useful if you want to see how you use OSMOSIS and this
+ * plugin a a library.
  *
  * @author bennokue
  */
@@ -44,7 +36,11 @@ public class CSVImportPluginTest {
      * Set this to false if you want to have a look at the generated osm files
      * for yourself. They will be created in your system's temp directory.
      */
-    public static final boolean deleteTemporaryFiles = false;
+    public static final boolean deleteTemporaryFiles = true;
+    /**
+     * How large should the cache be? Too small: More cache misses. Too large:
+     * Lines will be read multiple times.
+     */
     public static final int cacheSize = 6000;
 
     private static final Logger logger = Logger.getLogger(CSVImportPluginTest.class.getName());
@@ -53,32 +49,35 @@ public class CSVImportPluginTest {
     }
 
     @BeforeClass
+    /**
+     * Initialize the logging system. Specify your needs at the
+     * {@code logging.properties} file.
+     */
     public static void initLogging() {
-//        try (InputStream is = CSVImportPluginTest.class.getResourceAsStream("/logging.properties")) {
-//            LogManager.getLogManager().readConfiguration(is);
-//        } catch (SecurityException | IOException | NullPointerException ex) {
-//            logger.log(Level.SEVERE, "ERROR: {0}\nlogging.properties not found inside jar!", ex.getMessage());
-//            System.out.println("Huhuhuhuhuuuu" + ex.getMessage());
-//            ex.printStackTrace();
-//        }
-//        logger.setLevel(Level.ALL);
-//        logger.addHandler(new ConsoleHandler());
-//        System.out.println(logger.getHandlers().length);
         logger.log(Level.FINEST, "Set up logging.");
         Calendar calendar = Calendar.getInstance();
         System.out.println("Test started at " + calendar.get(Calendar.HOUR_OF_DAY) + ":" + calendar.get(Calendar.MINUTE) + ":" + calendar.get(Calendar.SECOND) + ".");
     }
 
     @AfterClass
+    /**
+     * Print a footer.
+     */
     public static void printTail() {
         Calendar calendar = Calendar.getInstance();
         System.out.println("Test ended at " + calendar.get(Calendar.HOUR_OF_DAY) + ":" + calendar.get(Calendar.MINUTE) + ":" + calendar.get(Calendar.SECOND) + ".");
     }
 
     @Rule
+    /**
+     * Use this to expect exceptions and their messages.
+     */
     public ExpectedException expectedEx = ExpectedException.none();
 
     @Test
+    /**
+     * Test the distance calculation.
+     */
     public void testDistanceChecks() {
         double lat1 = 48.1465401;
         double lon1 = 11.5932276;
@@ -95,6 +94,9 @@ public class CSVImportPluginTest {
     }
 
     @Test
+    /**
+     * Fail-test without input filename.
+     */
     public void testWithoutFilename() {
         expectedEx.expect(IllegalArgumentException.class);
         expectedEx.expectMessage("You have to provide an input file!");
@@ -102,6 +104,9 @@ public class CSVImportPluginTest {
     }
 
     @Test
+    /**
+     * Fail-test with illegal input file.
+     */
     public void testWithIllegalInputFile() {
         expectedEx.expect(IllegalArgumentException.class);
         expectedEx.expectMessage("iAmNotHere.csv is not a file or not readable!");
@@ -109,15 +114,10 @@ public class CSVImportPluginTest {
     }
 
     @Test
+    /**
+     * Fail-test with {@code maxDist} but no {@code latPos}.
+     */
     public void testWithMaxDistButNoLatPos() throws URISyntaxException {
-        expectedEx.expect(IllegalArgumentException.class);
-        expectedEx.expectMessage("Provide latPos and lonPos when using maxDist");
-        File inputFile = new File(new URI(CSVImportPluginTest.class.getResource("/sorted_linenumbers.csv").toString()).getSchemeSpecificPart());
-        CSVImportPlugin_task task = new CSVImportPlugin_task(inputFile.getPath(), 1, 2, -1, 2, "testTag", 7, CSVImportPlugin_task.MaxDistAction.WARN, cacheSize);
-    }
-
-    @Test
-    public void testWithMaxDistButNoLonPos() throws URISyntaxException {
         expectedEx.expect(IllegalArgumentException.class);
         expectedEx.expectMessage("Provide latPos and lonPos when using maxDist");
         File inputFile = new File(new URI(CSVImportPluginTest.class.getResource("/sorted_linenumbers.csv").toString()).getSchemeSpecificPart());
@@ -125,6 +125,20 @@ public class CSVImportPluginTest {
     }
 
     @Test
+    /**
+     * Fail-test with {@code maxDist} but no {@code lonPos}.
+     */
+    public void testWithMaxDistButNoLonPos() throws URISyntaxException {
+        expectedEx.expect(IllegalArgumentException.class);
+        expectedEx.expectMessage("Provide latPos and lonPos when using maxDist");
+        File inputFile = new File(new URI(CSVImportPluginTest.class.getResource("/sorted_linenumbers.csv").toString()).getSchemeSpecificPart());
+        CSVImportPlugin_task task = new CSVImportPlugin_task(inputFile.getPath(), 1, 2, -1, 2, "testTag", 7, CSVImportPlugin_task.MaxDistAction.WARN, cacheSize);
+    }
+
+    @Test
+    /**
+     * Fail-test without {@code idPos}.
+     */
     public void testWithoutOSMIDPos() throws URISyntaxException {
         expectedEx.expect(IllegalArgumentException.class);
         expectedEx.expectMessage("Please provide an idPos greater than 0");
@@ -133,6 +147,9 @@ public class CSVImportPluginTest {
     }
 
     @Test
+    /**
+     * Fail-test without {@code tagDataPos}.
+     */
     public void testWithoutTagDataPos() throws URISyntaxException {
         expectedEx.expect(IllegalArgumentException.class);
         expectedEx.expectMessage("Please provide a tagDataPos greater than 0");
@@ -141,6 +158,9 @@ public class CSVImportPluginTest {
     }
 
     @Test
+    /**
+     * Fail-test without {@code outputTagName}.
+     */
     public void testWithoutOutputTagName() throws URISyntaxException {
         expectedEx.expect(IllegalArgumentException.class);
         expectedEx.expectMessage("Please provide an outputTag");
@@ -149,6 +169,9 @@ public class CSVImportPluginTest {
     }
 
     @Test
+    /**
+     * Test with a sorted input file.
+     */
     public void testWithSortedInputFile() throws URISyntaxException, IOException, ParserConfigurationException, SAXException, XPathExpressionException {
         File testFile = conductTest("/munich_lmu_original.osm", "/sorted_linenumbers.csv", 1, -1, -1, 2, "lmuTag", Double.POSITIVE_INFINITY, CSVImportPlugin_task.MaxDistAction.WARN, cacheSize);
         XMLFlattener flattener = new XMLFlattener(testFile);
@@ -158,6 +181,9 @@ public class CSVImportPluginTest {
     }
 
     @Test
+    /**
+     * Test with a shuffled input file.
+     */
     public void testWithUnsortedInputFile() throws URISyntaxException, IOException, ParserConfigurationException, SAXException, XPathExpressionException {
         File testFile = conductTest("/munich_lmu_original.osm", "/unsorted_linenumbers.csv", 1, -1, -1, 2, "lmuTag", Double.POSITIVE_INFINITY, CSVImportPlugin_task.MaxDistAction.WARN, cacheSize);
         XMLFlattener flattener = new XMLFlattener(testFile);
@@ -167,6 +193,9 @@ public class CSVImportPluginTest {
     }
 
     @Test
+    /**
+     * Test with a shuffled input file where some ids are commented out.
+     */
     public void testWithUnsortedInputFileMissingIds() throws URISyntaxException, IOException, ParserConfigurationException, SAXException, XPathExpressionException {
         File testFile = conductTest("/munich_lmu_original.osm", "/unsorted_linenumbers_missingIds.csv", 1, -1, -1, 2, "lmuTag", Double.POSITIVE_INFINITY, CSVImportPlugin_task.MaxDistAction.WARN, cacheSize);
         XMLFlattener flattener = new XMLFlattener(testFile);
@@ -176,6 +205,9 @@ public class CSVImportPluginTest {
     }
 
     @Test
+    /**
+     * Test with a shuffled input file with some empty lines.
+     */
     public void testWithUnsortedInputFileEmptyLines() throws URISyntaxException, IOException, ParserConfigurationException, SAXException, XPathExpressionException {
         File testFile = conductTest("/munich_lmu_original.osm", "/unsorted_linenumbers_emptyLines.csv", 1, -1, -1, 2, "lmuTag", Double.POSITIVE_INFINITY, CSVImportPlugin_task.MaxDistAction.WARN, cacheSize);
         XMLFlattener flattener = new XMLFlattener(testFile);
@@ -185,6 +217,10 @@ public class CSVImportPluginTest {
     }
 
     @Test
+    /**
+     * Test with a shuffled input file with two faked positions (see
+     * {@code unsorted_linenumbers_differingLonLat.csv}).
+     */
     public void testWithUnsortedInputFileDifferingPositions() throws URISyntaxException, IOException, ParserConfigurationException, SAXException, XPathExpressionException {
         // 3 meters distance -- WARN only
         File testFile = conductTest("/munich_lmu_original.osm", "/unsorted_linenumbers_differingLonLat.csv", 1, 2, 3, 4, "lmuTag", 3.0, CSVImportPlugin_task.MaxDistAction.WARN, cacheSize);
@@ -208,6 +244,22 @@ public class CSVImportPluginTest {
         assertArrayEquals("Third turn", expectedValues, resultValues);
     }
 
+    /**
+     * Let the plugin run with specified parameters.
+     * @param OSMinputFileString
+     * @param CSVinputFileString
+     * @param idPos
+     * @param latPos
+     * @param lonPos
+     * @param tagDataPos
+     * @param outputTag
+     * @param maxDist
+     * @param maxDistAction
+     * @param csvCacheSize
+     * @return The OSM output file.
+     * @throws URISyntaxException
+     * @throws IOException 
+     */
     private static File conductTest(String OSMinputFileString, String CSVinputFileString, int idPos,
             int latPos, int lonPos, int tagDataPos, String outputTag,
             Double maxDist, CSVImportPlugin_task.MaxDistAction maxDistAction,
@@ -236,6 +288,12 @@ public class CSVImportPluginTest {
         return outputFile;
     }
 
+    /**
+     * Makes an array with an integer range as strings.
+     * @param start Lowest value.
+     * @param end Highest value.
+     * @return The result array.
+     */
     private String[] fillWithStringRange(int start, int end) {
         String[] result = new String[(end - start) + 1];
         int value = start;
@@ -246,6 +304,13 @@ public class CSVImportPluginTest {
         return result;
     }
 
+    /**
+     * Makes an array with an integer range as strings and allows you to leave some out.
+     * @param start Lowest value.
+     * @param end Highest value.
+     * @param leaveOutNumbers Array with the numbers to skip.
+     * @return The result array.
+     */
     private String[] fillWithStringRange(int start, int end, int[] leaveOutNumbers) {
         // Set creation 
         HashSet<Integer> leaveOutNumbersSet = new HashSet<>(leaveOutNumbers.length);

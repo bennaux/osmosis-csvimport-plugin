@@ -1,19 +1,12 @@
-/*
- * TODO Benno javadoc
- */
 package net.bennokue.java.osmosis;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import jdk.nashorn.internal.codegen.CompilerConstants;
 import org.openstreetmap.osmosis.core.container.v0_6.BoundContainer;
 import org.openstreetmap.osmosis.core.container.v0_6.EntityContainer;
 import org.openstreetmap.osmosis.core.container.v0_6.EntityProcessor;
@@ -27,14 +20,53 @@ import org.openstreetmap.osmosis.core.task.v0_6.Sink;
 import org.openstreetmap.osmosis.core.task.v0_6.SinkSource;
 
 /**
+ * This class implements the task to import data from a CSV file and match it to
+ * the OSM data. The plugin iterates over the nodes that are read eg. by
+ * {@code --read-xml} and over a csv file that contains node ids with
+ * latitude/longitude and any kind of data and merges the data into a tag of the
+ * corresponding OSM nodes.
+ * <p>
+ * There are the following parameters (named like the CLI parameters
+ * here):</p><ul><li>{@code idPos}: The position of the OSM id in each line of
+ * the csv file (all {@code ~pos} values start counting at {@code 1}, so
+ * {@code 0} is not a valid argument).</li><li>{@code latPos}: Optional
+ * argument. The CSV line position of the nodes'
+ * latitude.</li><li>{@code lonPos}: Optional argument. The CSV line position of
+ * the nodes' longitude.</li><li>{@code tagDataPos}: The CSV line position of
+ * the data that should be imported into a node tag.</li><li>{@code outputTag}:
+ * The name of that tag.</li><li>{@code maxDist}: Optional argument, only
+ * working whith {@code latPos} and {@code lonPos}: If given, there will be some
+ * action if the position of the CSV node and the OSM node differ more than
+ * {@code maxDist} meters. <em>Defaults to
+ * {@code POSITIVE_INFINITY}</em>.</li><li>{@code maxDistAction}: The action
+ * that should be taken if a distance exceeds {@code maxDist}. See
+ * {@link MaxDistAction}.<em>Defaults to
+ * {@link MaxDistAction#WARN}</em>.</li><li>{@code inputCSV}: The path to the
+ * CSV file to import.</li><li>{@code csvCacheSize}: The size of the CSV lines
+ * cache.</li></ul>Note: Empty lines and lines starting with a semicolon will be
+ * ignored.<p>If you want to use the plugin as a lib, you might also be
+ * interested at the test classes.</p>
  *
  * @author bennokue
  */
 public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
 
+    /**
+     * What should be done if the position of a OSM node and the position of the
+     * node at the matching line in the CSV files differ more then
+     * {@code maxDist}?
+     *
+     * @see CSVImportPlugin_task
+     */
     public static enum MaxDistAction {
 
+        /**
+         * Warn only.
+         */
         WARN,
+        /**
+         * Warn and do <strong>not</strong> import this value.
+         */
         DELETE
     }
 
@@ -48,15 +80,57 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
      */
     private final String outputTag;
 
+    /**
+     * CSV line position of the OSM id (first field = {@code 0}).
+     */
     private final int osmIdCSVPosition;
+    /**
+     * CSV line position of the OSM latitude (first field = {@code 0}).
+     */
     private final int osmLatitudeCSVPosition;
+    /**
+     * CSV line position of the OSM longitude (first field = {@code 0}).
+     */
     private final int osmLongitudeCSVPosition;
+    /**
+     * CSV line position of the data to import (first field = {@code 0}).
+     */
     private final int tagDataCSVPosition;
+    /**
+     * See {@link CSVImportPlugin_task}.
+     */
     private final double maxNodeDistance;
+    /**
+     * See {@link CSVImportPlugin_task}.
+     */
     private final MaxDistAction maxDistAction;
+    /**
+     * THe CSV input file.
+     */
     private final File inputCSV;
+    /**
+     * Our cache csv loader.
+     */
     private CSVLoader csvLoader;
 
+    /**
+     * Standard constructor with some sanity checks.
+     *
+     * @param inputCSV The input CSV file.
+     * @param osmIdPos The CSV line position of the OSM id (first field =
+     * {@code 0}).
+     * @param osmLatPos The CSV line position of the OSM latitude (first field =
+     * {@code 0}).
+     * @param osmLonPos The CSV line position of the OSM longitude (first field
+     * = {@code 0}).
+     * @param dataPos The CSV line position of the data to be imported (first
+     * field = {@code 0}).
+     * @param outputTagName The name of the output tag.
+     * @param maxDist See {@link CSVImportPlugin_task}.
+     * @param maxDistAction See {@link CSVImportPlugin_task}.
+     * @param csvCacheSize The line reading cache size, see
+     * {@link CSVLoader#CSVLoader(java.io.File, int, int, int, int, int)}.
+     */
     public CSVImportPlugin_task(String inputCSV, int osmIdPos, int osmLatPos, int osmLonPos, int dataPos, String outputTagName, double maxDist, MaxDistAction maxDistAction, int csvCacheSize) {
         if (inputCSV.equals("")) {
             throw new IllegalArgumentException("You have to provide an input file!");
@@ -151,6 +225,16 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
         sink.process(new NodeContainer(new Node(ced, lat, lon)));
     }
 
+    /**
+     * Look for the current node at the cache and check the distance if found.
+     *
+     * @param osmId The OSM node ID.
+     * @param lat The OSM node latitude.
+     * @param lon The OSM node longitude.
+     * @return The value to be imported or {@code null} if there is no such
+     * element at the CSV or the distance is larger than
+     * {@link #maxNodeDistance} and we are in {@link MaxDistAction#DELETE} mode.
+     */
     private String getNodeTagValue(long osmId, double lat, double lon) {
         // Look for the item
         CSVItem item = null;

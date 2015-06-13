@@ -1,6 +1,3 @@
-/*
- * TODO Benno javadoc
- */
 package net.bennokue.java.osmosis;
 
 import java.util.logging.Logger;
@@ -18,17 +15,15 @@ import org.openstreetmap.osmosis.core.task.v0_6.SinkSource;
 public class CSVImportPlugin_factory extends TaskManagerFactory {
 
     private static final Logger log = Logger.getLogger(CSVImportPlugin_factory.class.getName());
-    /**
-     * CLI argument name for the output tag.
+    /*
+     * In the following, the CLI argument names and their default parameters are
+     * defined. ARG_ variables store the argument name, DEFAULT_ variables the
+     * default value.
      */
     private static final String ARG_OUTPUT_TAG = "outputTag";
-    /**
-     * Default value for {@link #ARG_OUTPUT_TAG}.
-     */
     private static final String DEFAULT_OUTPUT_TAG = "";
-    
     private static final String ARG_ID_POSITION = "idPos";
-    private static final int DEFAULT_ID_POSITION = 0;
+    private static final int DEFAULT_ID_POSITION = -1;
     private static final String ARG_LATITUDE_POSITION = "latPos";
     private static final int DEFAULT_LATITUDE_POSITION = -1;
     private static final String ARG_LONGITUDE_POSITION = "lonPos";
@@ -56,9 +51,9 @@ public class CSVImportPlugin_factory extends TaskManagerFactory {
         CSVImportPlugin_task.MaxDistAction maxDistAction = CSVImportPlugin_task.MaxDistAction.valueOf(getStringArgument(taskConfig, ARG_MAXDIST_ACTION, DEFAULT_MAXDIST_ACTION).toUpperCase());
         String inputCSV = getStringArgument(taskConfig, ARG_INPUT_CSV, DEFAULT_INPUT_CSV);
         int csvCacheSize = getIntegerArgument(taskConfig, ARG_CSV_CACHE_SIZE, DEFAULT_CSV_CACHE_SIZE);
-        
-        SinkSource task = new CSVImportPlugin_task(inputCSV, idPosition, latPosition, lonPosition, dataPosition, outputTag, maxDist, maxDistAction, csvCacheSize);
 
+        // Create the task
+        SinkSource task = new CSVImportPlugin_task(inputCSV, idPosition, latPosition, lonPosition, dataPosition, outputTag, maxDist, maxDistAction, csvCacheSize);
         return new SinkSourceManager(taskConfig.getId(), task, taskConfig.getPipeArgs());
     }
 }

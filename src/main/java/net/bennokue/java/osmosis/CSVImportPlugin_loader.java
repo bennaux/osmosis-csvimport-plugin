@@ -1,6 +1,3 @@
-/*
- * TODO Benno javadoc
- */
 package net.bennokue.java.osmosis;
 
 import java.util.HashMap;
@@ -10,9 +7,11 @@ import org.openstreetmap.osmosis.core.plugin.PluginLoader;
 
 /**
  * Loads the CSVImportPlugin during OSMOSIS initialization.
+ *
  * @author bennokue
  */
 public class CSVImportPlugin_loader implements PluginLoader {
+
     /**
      * The CLI argument that tells OSMOSIS to run the CSVImportPlugin.
      */
