@@ -1,14 +1,9 @@
 package net.bennokue.java.osmosis;
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStreamWriter;
+import java.io.*;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.Calendar;
-import java.util.HashSet;
+import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.xml.parsers.ParserConfigurationException;
@@ -242,10 +237,34 @@ public class CSVImportPluginTest {
         resultValues = flattener.getXPathAsArray("/osm/node/tag[@k=\"lmuTag\"]/@v");
         expectedValues = fillWithStringRange(1, 5507, new int[]{2597, 1683});
         assertArrayEquals("Third turn", expectedValues, resultValues);
+
+        // 1 meter distance -- DELETE and LOG
+        testFile = conductTest("/munich_lmu_original.osm", "/unsorted_linenumbers_differingLonLat.csv", 1, 2, 3, 4, "lmuTag", 1.0, CSVImportPlugin_task.MaxDistAction.LOG, cacheSize);
+        flattener = new XMLFlattener(testFile);
+        resultValues = flattener.getXPathAsArray("/osm/node/tag[@k=\"lmuTag\"]/@v");
+        expectedValues = fillWithStringRange(1, 5507, new int[]{2597, 1683});
+        assertArrayEquals("Fourth turn (values)", expectedValues, resultValues);
+        // Check the log file
+        File logFile = new File(new URI(CSVImportPluginTest.class.getResource("/unsorted_linenumbers_differingLonLat-dirtyNodes.csv").toString()));
+        BufferedReader logFileReader = new BufferedReader(new FileReader(logFile));
+        String[] expectedLogMessages = new String[]{
+            "; osmId,lat,lon,csvLat,csvLon,csvData,deviation",
+            "1565197595,48.1501216,11.5952002,48.1501316,11.5952002,1683," + CSVItem.distFrom(48.1501216, 11.5952002, 48.1501316, 11.5952002),
+            "2524542752,48.1346312,11.5945651,48.1346812,11.5945651,2597," + CSVItem.distFrom(48.1346312, 11.5945651, 48.1346812, 11.5945651)
+        };
+        String line = logFileReader.readLine(); // The first line contains unforseeable data
+        line = logFileReader.readLine();
+        ArrayList<String> logLines = new ArrayList<>();
+        while (null != line) {
+            logLines.add(line);
+            line = logFileReader.readLine();
+        }
+        assertArrayEquals("Fourth turn (logLines)", expectedLogMessages, logLines.toArray());
     }
 
     /**
      * Let the plugin run with specified parameters.
+     *
      * @param OSMinputFileString
      * @param CSVinputFileString
      * @param idPos
@@ -258,7 +277,7 @@ public class CSVImportPluginTest {
      * @param csvCacheSize
      * @return The OSM output file.
      * @throws URISyntaxException
-     * @throws IOException 
+     * @throws IOException
      */
     private static File conductTest(String OSMinputFileString, String CSVinputFileString, int idPos,
             int latPos, int lonPos, int tagDataPos, String outputTag,
@@ -290,6 +309,7 @@ public class CSVImportPluginTest {
 
     /**
      * Makes an array with an integer range as strings.
+     *
      * @param start Lowest value.
      * @param end Highest value.
      * @return The result array.
@@ -305,7 +325,9 @@ public class CSVImportPluginTest {
     }
 
     /**
-     * Makes an array with an integer range as strings and allows you to leave some out.
+     * Makes an array with an integer range as strings and allows you to leave
+     * some out.
+     *
      * @param start Lowest value.
      * @param end Highest value.
      * @param leaveOutNumbers Array with the numbers to skip.
