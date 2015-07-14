@@ -44,8 +44,9 @@ import org.openstreetmap.osmosis.core.task.v0_6.SinkSource;
  * {@link MaxDistAction#WARN}</em>.</li><li>{@code inputCSV}: The path to the
  * CSV file to import.</li><li>{@code csvCacheSize}: The size of the CSV lines
  * cache.</li></ul>Note: Empty lines and lines starting with a semicolon will be
- * ignored.<p>If you want to use the plugin as a lib, you might also be
- * interested at the test classes.</p>
+ * ignored.<p>
+ * If you want to use the plugin as a lib, you might also be interested at the
+ * test classes.</p>
  *
  * @author bennokue
  */
@@ -112,6 +113,10 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
      * Our cache csv loader.
      */
     private CSVLoader csvLoader;
+    /**
+     * Statistics.
+     */
+    private int numberOfNodesProcessed = 0, numberOfNodesImportedSuccessfully = 0;
 
     /**
      * Standard constructor with some sanity checks.
@@ -170,7 +175,13 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
             logger.log(Level.SEVERE, null, ex);
             System.exit(1);
         }
+    }
 
+    /**
+     * Prints statistics with sysout.
+     */
+    private void printStatistics() {
+        System.out.println("CSV import finished. Processed nodes: " + this.numberOfNodesProcessed + "; Successful imorts: " + this.numberOfNodesImportedSuccessfully + "; Errors: " + (this.numberOfNodesProcessed - this.numberOfNodesImportedSuccessfully));
     }
 
     @Override
@@ -210,6 +221,7 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
         // Add new output tag if it is there
         if (null != outputTagValue && !outputTagValue.equals("")) {
             nodeTags.add(new Tag(this.outputTag, outputTagValue));
+            this.numberOfNodesImportedSuccessfully++;
         }
 
         // Create new node entity with adjusted attributes
@@ -220,6 +232,8 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
                 node.getUser(),
                 node.getChangesetId(),
                 nodeTags);
+
+        this.numberOfNodesProcessed++;
 
         // Distribute the new nodecontainer to the following sink
         sink.process(new NodeContainer(new Node(ced, lat, lon)));
@@ -274,6 +288,7 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
 
     @Override
     public void complete() {
+        this.printStatistics();
         sink.complete();
     }
 
