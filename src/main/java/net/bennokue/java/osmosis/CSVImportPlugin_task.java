@@ -1,8 +1,6 @@
 package net.bennokue.java.osmosis;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
+import java.io.*;
 import java.util.Collection;
 import java.util.Map;
 import java.util.logging.Level;
@@ -68,7 +66,11 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
         /**
          * Warn and do <strong>not</strong> import this value.
          */
-        DELETE
+        DELETE,
+        /**
+         * Like DELETE, but also dump the lines into a logfile.
+         */
+        LOG
     }
 
     private static final Logger logger = Logger.getLogger(CSVImportPlugin_task.class.getName());
@@ -113,6 +115,14 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
      * Our cache csv loader.
      */
     private CSVLoader csvLoader;
+    /**
+     * The writer of the logfile (used in mode {@link MaxDistAction#LOG}).
+     */
+    private PrintWriter logWriter;
+    /**
+     * The path to the logfile.
+     */
+    private String logfilePath;
     /**
      * Statistics.
      */
@@ -170,6 +180,12 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
 
         try {
             this.csvLoader = new CSVLoader(this.inputCSV, csvCacheSize, osmIdPos, osmLatPos, osmLonPos, dataPos);
+            if (this.maxDistAction == MaxDistAction.LOG) {
+                File logFileFile = new File(this.inputCSV.getParent(), stripExtension(this.inputCSV.getName()) + "-dirtyNodes.csv");
+                this.logWriter = new PrintWriter(logFileFile);
+                this.logfilePath = logFileFile.getPath();
+                this.initLogfile();
+            }
         } catch (FileNotFoundException ex) {
             this.csvLoader = null;
             logger.log(Level.SEVERE, null, ex);
@@ -182,6 +198,9 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
      */
     private void printStatistics() {
         System.out.println("CSV import finished. Processed nodes: " + this.numberOfNodesProcessed + "; Successful imorts: " + this.numberOfNodesImportedSuccessfully + "; Errors: " + (this.numberOfNodesProcessed - this.numberOfNodesImportedSuccessfully));
+        if (null != this.logWriter) {
+            System.out.println("Log file written to: " + this.logfilePath);
+        }
     }
 
     @Override
@@ -269,11 +288,45 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
             } else if (this.maxDistAction == MaxDistAction.WARN) {
                 logger.log(Level.WARNING, "Node {0} has distance {1} to the point where it should be!", new Object[]{osmId, distance});
                 return item.DATA;
+            } else if (this.maxDistAction == MaxDistAction.LOG) {
+                logger.log(Level.WARNING, "Node {0} has distance {1} to the point where it should be! We do not import it.", new Object[]{osmId, distance});
+                this.logWriter.print(osmId);
+                this.logWriter.print(",");
+                this.logWriter.print(lat);
+                this.logWriter.print(",");
+                this.logWriter.print(lon);
+                this.logWriter.print(",");
+                this.logWriter.print(item.OSM_LAT);
+                this.logWriter.print(",");
+                this.logWriter.print(item.OSM_LON);
+                this.logWriter.print(",");
+                this.logWriter.print(item.DATA);
+                this.logWriter.print(",");
+                this.logWriter.println(distance);
+                return "";
             } else {
                 throw new IllegalArgumentException("Unknown action: " + this.maxDistAction.toString());
             }
         }
         return item.DATA;
+    }
+
+    /**
+     * Prints header comments to the log file.
+     * @throws NullPointerException If there is no log file.
+     */
+    private void initLogfile() {
+        this.logWriter.println("; Input file: " + this.inputCSV.getPath());
+        this.logWriter.println("; osmId,lat,lon,csvLat,csvLon,csvData,deviation");
+    }
+
+    /**
+     * Closes the log file if needed.
+     */
+    private void finishLogfile() {
+        if (null != this.logWriter) {
+            this.logWriter.close();
+        }
     }
 
     @Override
@@ -289,6 +342,7 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
     @Override
     public void complete() {
         this.printStatistics();
+        this.finishLogfile();
         sink.complete();
     }
 
@@ -305,5 +359,19 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
     @Override
     public void initialize(Map<String, Object> metaData) {
         // added in osmosis 0.41
+    }
+
+    /**
+     * Remove the extension from a filename.
+     *
+     * @param filename The filename.
+     * @return The filename without its extension.
+     */
+    private static String stripExtension(String filename) {
+        int indexOfDot = filename.lastIndexOf(".");
+        if (indexOfDot > 0) {
+            return filename.substring(0, indexOfDot);
+        }
+        return filename;
     }
 }
