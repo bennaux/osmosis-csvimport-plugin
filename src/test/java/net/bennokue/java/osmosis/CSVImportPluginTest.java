@@ -8,11 +8,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.xpath.XPathExpressionException;
-import org.junit.AfterClass;
-import org.junit.Test;
+import org.junit.*;
 import static org.junit.Assert.*;
-import org.junit.BeforeClass;
-import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.openstreetmap.osmosis.xml.common.CompressionMethod;
 import org.openstreetmap.osmosis.xml.v0_6.XmlReader;
@@ -34,7 +31,8 @@ public class CSVImportPluginTest {
     public static final boolean deleteTemporaryFiles = true;
     /**
      * How large should the cache be? Too small: More cache misses. Too large:
-     * Lines will be read multiple times.
+     * Lines will be read multiple times. -1: Best choice if the whole CSV fits
+     * into memory.
      */
     public static final int cacheSize = 6000;
 
@@ -240,6 +238,57 @@ public class CSVImportPluginTest {
 
         // 1 meter distance -- DELETE and LOG
         testFile = conductTest("/munich_lmu_original.osm", "/unsorted_linenumbers_differingLonLat.csv", 1, 2, 3, 4, "lmuTag", 1.0, CSVImportPlugin_task.MaxDistAction.LOG, cacheSize);
+        flattener = new XMLFlattener(testFile);
+        resultValues = flattener.getXPathAsArray("/osm/node/tag[@k=\"lmuTag\"]/@v");
+        expectedValues = fillWithStringRange(1, 5507, new int[]{2597, 1683});
+        assertArrayEquals("Fourth turn (values)", expectedValues, resultValues);
+        // Check the log file
+        File logFile = new File(new URI(CSVImportPluginTest.class.getResource("/unsorted_linenumbers_differingLonLat-dirtyNodes.csv").toString()));
+        BufferedReader logFileReader = new BufferedReader(new FileReader(logFile));
+        String[] expectedLogMessages = new String[]{
+            "; osmId,lat,lon,csvLat,csvLon,csvData,deviation",
+            "1565197595,48.1501216,11.5952002,48.1501316,11.5952002,1683," + CSVItem.distFrom(48.1501216, 11.5952002, 48.1501316, 11.5952002),
+            "2524542752,48.1346312,11.5945651,48.1346812,11.5945651,2597," + CSVItem.distFrom(48.1346312, 11.5945651, 48.1346812, 11.5945651)
+        };
+        String line = logFileReader.readLine(); // The first line contains unforseeable data
+        line = logFileReader.readLine();
+        ArrayList<String> logLines = new ArrayList<>();
+        while (null != line) {
+            logLines.add(line);
+            line = logFileReader.readLine();
+        }
+        assertArrayEquals("Fourth turn (logLines)", expectedLogMessages, logLines.toArray());
+    }
+
+    @Test
+    /**
+     * Like {@link #testWithUnsortedInputFileDifferingPositions()}, but with
+     * endless cache.
+     */
+    public void testWithUnsortedInputFileDifferingPositionsEndlessCache() throws URISyntaxException, IOException, ParserConfigurationException, SAXException, XPathExpressionException {
+        // 3 meters distance -- WARN only
+        File testFile = conductTest("/munich_lmu_original.osm", "/unsorted_linenumbers_differingLonLat.csv", 1, 2, 3, 4, "lmuTag", 3.0, CSVImportPlugin_task.MaxDistAction.WARN, -1);
+        XMLFlattener flattener = new XMLFlattener(testFile);
+        String[] resultValues = flattener.getXPathAsArray("/osm/node/tag[@k=\"lmuTag\"]/@v");
+        String[] expectedValues = fillWithStringRange(1, 5507); // Warn only!
+        assertArrayEquals("First turn", expectedValues, resultValues);
+
+        // 3 meters distance -- DELETE nodes
+        testFile = conductTest("/munich_lmu_original.osm", "/unsorted_linenumbers_differingLonLat.csv", 1, 2, 3, 4, "lmuTag", 3.0, CSVImportPlugin_task.MaxDistAction.DELETE, -1);
+        flattener = new XMLFlattener(testFile);
+        resultValues = flattener.getXPathAsArray("/osm/node/tag[@k=\"lmuTag\"]/@v");
+        expectedValues = fillWithStringRange(1, 5507, new int[]{2597});
+        assertArrayEquals("Second turn", expectedValues, resultValues);
+
+        // 1 meter distance -- DELETE nodes
+        testFile = conductTest("/munich_lmu_original.osm", "/unsorted_linenumbers_differingLonLat.csv", 1, 2, 3, 4, "lmuTag", 1.0, CSVImportPlugin_task.MaxDistAction.DELETE, -1);
+        flattener = new XMLFlattener(testFile);
+        resultValues = flattener.getXPathAsArray("/osm/node/tag[@k=\"lmuTag\"]/@v");
+        expectedValues = fillWithStringRange(1, 5507, new int[]{2597, 1683});
+        assertArrayEquals("Third turn", expectedValues, resultValues);
+
+        // 1 meter distance -- DELETE and LOG
+        testFile = conductTest("/munich_lmu_original.osm", "/unsorted_linenumbers_differingLonLat.csv", 1, 2, 3, 4, "lmuTag", 1.0, CSVImportPlugin_task.MaxDistAction.LOG, -1);
         flattener = new XMLFlattener(testFile);
         resultValues = flattener.getXPathAsArray("/osm/node/tag[@k=\"lmuTag\"]/@v");
         expectedValues = fillWithStringRange(1, 5507, new int[]{2597, 1683});

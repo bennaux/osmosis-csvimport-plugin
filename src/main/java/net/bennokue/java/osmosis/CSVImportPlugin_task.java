@@ -5,6 +5,8 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import net.bennokue.java.osmosis.niceThings.ProgressMonitoringThread;
+import net.bennokue.java.osmosis.niceThings.ProgressTellingOsmosisTask;
 import org.openstreetmap.osmosis.core.container.v0_6.BoundContainer;
 import org.openstreetmap.osmosis.core.container.v0_6.EntityContainer;
 import org.openstreetmap.osmosis.core.container.v0_6.EntityProcessor;
@@ -41,14 +43,17 @@ import org.openstreetmap.osmosis.core.task.v0_6.SinkSource;
  * {@link MaxDistAction}.<em>Defaults to
  * {@link MaxDistAction#WARN}</em>.</li><li>{@code inputCSV}: The path to the
  * CSV file to import.</li><li>{@code csvCacheSize}: The size of the CSV lines
- * cache.</li></ul>Note: Empty lines and lines starting with a semicolon will be
- * ignored.<p>
+ * cache. {@code -1} will deactivate the upper bound and will make things
+ * <em>way</em> faster.</li><li>{@code progressInfoIntervalSecs}: If set to a
+ * number {@code x > 0}, a Thread ({@link ProgressMonitoringThread}) will output
+ * the current status every {@code x} seconds.</li></ul>Note: Empty lines and
+ * lines starting with a semicolon will be ignored.<p>
  * If you want to use the plugin as a lib, you might also be interested at the
  * test classes.</p>
  *
  * @author bennokue
  */
-public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
+public class CSVImportPlugin_task implements SinkSource, EntityProcessor, ProgressTellingOsmosisTask {
 
     /**
      * What should be done if the position of a OSM node and the position of the
@@ -126,7 +131,11 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
     /**
      * Statistics.
      */
-    private int numberOfNodesProcessed = 0, numberOfNodesImportedSuccessfully = 0;
+    private int numberOfNodesProcessed = 0, numberOfNodesImportedSuccessfully = 0, numberOfNodesNotFoundInCSV = 0, numberOfNodesNotImportedDueToMaxDist = 0;
+    /**
+     * Thread to output the status information or {@code null}.
+     */
+    private final ProgressMonitoringThread monitoringThread;
 
     /**
      * Standard constructor with some sanity checks.
@@ -145,8 +154,12 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
      * @param maxDistAction See {@link CSVImportPlugin_task}.
      * @param csvCacheSize The line reading cache size, see
      * {@link CSVLoader#CSVLoader(java.io.File, int, int, int, int, int)}.
+     * @param progressInformationIntervalSeconds If set to {@code -1}, nothing
+     * is changed. If set to something higher than {@code 0}, at this interval,
+     * an extra Thread ({@link ProgressMonitoringThread} will print progress
+     * information onto the screen.
      */
-    public CSVImportPlugin_task(String inputCSV, int osmIdPos, int osmLatPos, int osmLonPos, int dataPos, String outputTagName, double maxDist, MaxDistAction maxDistAction, int csvCacheSize) {
+    public CSVImportPlugin_task(String inputCSV, int osmIdPos, int osmLatPos, int osmLonPos, int dataPos, String outputTagName, double maxDist, MaxDistAction maxDistAction, int csvCacheSize, int progressInformationIntervalSeconds) {
         if (inputCSV.equals("")) {
             throw new IllegalArgumentException("You have to provide an input file!");
         }
@@ -191,6 +204,37 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
             logger.log(Level.SEVERE, null, ex);
             System.exit(1);
         }
+
+        // Initializes monitoring thread
+        if (progressInformationIntervalSeconds > 0) {
+            this.monitoringThread = new ProgressMonitoringThread(this, progressInformationIntervalSeconds);
+            this.monitoringThread.start();
+        } else {
+            this.monitoringThread = null;
+        }
+    }
+
+    /**
+     * Standard constructor with some sanity checks, but without
+     * {@link ProgressMonitoringThread}.
+     *
+     * @param inputCSV The input CSV file.
+     * @param osmIdPos The CSV line position of the OSM id (first field =
+     * {@code 0}).
+     * @param osmLatPos The CSV line position of the OSM latitude (first field =
+     * {@code 0}).
+     * @param osmLonPos The CSV line position of the OSM longitude (first field
+     * = {@code 0}).
+     * @param dataPos The CSV line position of the data to be imported (first
+     * field = {@code 0}).
+     * @param outputTagName The name of the output tag.
+     * @param maxDist See {@link CSVImportPlugin_task}.
+     * @param maxDistAction See {@link CSVImportPlugin_task}.
+     * @param csvCacheSize The line reading cache size, see
+     * {@link CSVLoader#CSVLoader(java.io.File, int, int, int, int, int)}.
+     */
+    public CSVImportPlugin_task(String inputCSV, int osmIdPos, int osmLatPos, int osmLonPos, int dataPos, String outputTagName, double maxDist, MaxDistAction maxDistAction, int csvCacheSize) {
+        this(inputCSV, osmIdPos, osmLatPos, osmLonPos, dataPos, outputTagName, maxDist, maxDistAction, csvCacheSize, -1);
     }
 
     /**
@@ -198,6 +242,7 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
      */
     private void printStatistics() {
         System.out.println("CSV import finished. Processed nodes: " + this.numberOfNodesProcessed + "; Successful imorts: " + this.numberOfNodesImportedSuccessfully + "; Errors: " + (this.numberOfNodesProcessed - this.numberOfNodesImportedSuccessfully));
+        System.out.println("More detailed:" + this.getProgressMessage());
         if (null != this.logWriter) {
             System.out.println("Log file written to: " + this.logfilePath);
         }
@@ -277,6 +322,7 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
             logger.log(Level.SEVERE, null, ex);
         }
         if (null == item) {
+            this.numberOfNodesNotFoundInCSV++;
             return "";
         }
         // Check the distance
@@ -284,6 +330,7 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
         if (distance > this.maxNodeDistance) {
             if (this.maxDistAction == MaxDistAction.DELETE) {
                 logger.log(Level.WARNING, "Node {0} has distance {1} to the point where it should be! We do not import it.", new Object[]{osmId, distance});
+                this.numberOfNodesNotImportedDueToMaxDist++;
                 return "";
             } else if (this.maxDistAction == MaxDistAction.WARN) {
                 logger.log(Level.WARNING, "Node {0} has distance {1} to the point where it should be!", new Object[]{osmId, distance});
@@ -303,6 +350,7 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
                 this.logWriter.print(item.DATA);
                 this.logWriter.print(",");
                 this.logWriter.println(distance);
+                this.numberOfNodesNotImportedDueToMaxDist++;
                 return "";
             } else {
                 throw new IllegalArgumentException("Unknown action: " + this.maxDistAction.toString());
@@ -313,6 +361,7 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
 
     /**
      * Prints header comments to the log file.
+     *
      * @throws NullPointerException If there is no log file.
      */
     private void initLogfile() {
@@ -341,6 +390,10 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
 
     @Override
     public void complete() {
+        if (null != this.monitoringThread) {
+            this.monitoringThread.taskFinished();
+            this.monitoringThread.interrupt();
+        }
         this.printStatistics();
         this.finishLogfile();
         sink.complete();
@@ -359,6 +412,19 @@ public class CSVImportPlugin_task implements SinkSource, EntityProcessor {
     @Override
     public void initialize(Map<String, Object> metaData) {
         // added in osmosis 0.41
+    }
+
+    @Override
+    public String getTaskDescription() {
+        return "import-tag-from-csv";
+    }
+
+    @Override
+    public String getProgressMessage() {
+        return " Cache entries: " + this.csvLoader.getCacheEntries() + " Processed nodes: " + this.numberOfNodesProcessed
+                + ", Imported values: " + this.numberOfNodesImportedSuccessfully
+                + ", Nodes not found: " + this.numberOfNodesNotFoundInCSV
+                + ", Nodes skipped due to maxDist: " + this.numberOfNodesNotImportedDueToMaxDist;
     }
 
     /**

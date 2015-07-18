@@ -37,7 +37,9 @@ public class CSVImportPlugin_factory extends TaskManagerFactory {
     private static final String ARG_INPUT_CSV = "inputCSV";
     private static final String DEFAULT_INPUT_CSV = "";
     private static final String ARG_CSV_CACHE_SIZE = "csvCacheSize";
-    private static final int DEFAULT_CSV_CACHE_SIZE = 5000;
+    private static final int DEFAULT_CSV_CACHE_SIZE = -1;
+    private static final String ARG_PROGRESS_INFO_INTERVAL = "progressInfoIntervalSecs";
+    private static final int DEFAULT_PROGRESS_INFO_INTERVAL = -1;
 
     @Override
     protected TaskManager createTaskManagerImpl(TaskConfiguration taskConfig) {
@@ -51,9 +53,10 @@ public class CSVImportPlugin_factory extends TaskManagerFactory {
         CSVImportPlugin_task.MaxDistAction maxDistAction = CSVImportPlugin_task.MaxDistAction.valueOf(getStringArgument(taskConfig, ARG_MAXDIST_ACTION, DEFAULT_MAXDIST_ACTION).toUpperCase());
         String inputCSV = getStringArgument(taskConfig, ARG_INPUT_CSV, DEFAULT_INPUT_CSV);
         int csvCacheSize = getIntegerArgument(taskConfig, ARG_CSV_CACHE_SIZE, DEFAULT_CSV_CACHE_SIZE);
+        int progressInfoIntervalSecs = getIntegerArgument(taskConfig, ARG_PROGRESS_INFO_INTERVAL, DEFAULT_PROGRESS_INFO_INTERVAL);
 
         // Create the task
-        SinkSource task = new CSVImportPlugin_task(inputCSV, idPosition, latPosition, lonPosition, dataPosition, outputTag, maxDist, maxDistAction, csvCacheSize);
+        SinkSource task = new CSVImportPlugin_task(inputCSV, idPosition, latPosition, lonPosition, dataPosition, outputTag, maxDist, maxDistAction, csvCacheSize, progressInfoIntervalSecs);
         return new SinkSourceManager(taskConfig.getId(), task, taskConfig.getPipeArgs());
     }
 }
