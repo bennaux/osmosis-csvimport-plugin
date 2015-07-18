@@ -30,7 +30,8 @@ public class CSVLoader {
      */
     private final HashMap<Long, CSVItem> cache;
     /**
-     * Don't let the cache get bigger than this.
+     * Don't let the cache get bigger than this. If this is {@code -1}, the csv
+     * file will only be read once.
      */
     private final int cacheSize;
     /**
@@ -93,7 +94,7 @@ public class CSVLoader {
      *
      * @param csvInputFile The CSV file to import.
      * @param cacheSize The cache will not exceed the number of slots specified
-     * here.
+     * here. If this is {@code -1}, the csv file will only be read once.
      * @param osmIdPos At this position in each line we look for the OSM id
      * (first element in a line has position {@code 1}).
      * @param osmLatPos At this position in each line we look for the OSM
@@ -121,11 +122,28 @@ public class CSVLoader {
     }
 
     /**
-     * Read as many lines as are needed to fill the cache completely, parse them
-     * and store them in cache. If the input file has fewer lines than the
-     * cache, lines will be read and parsed more than once.
+     * Fills the cache, depending if it has a maximum size specified ({@link #fillCacheWithMaxSize()
+     * } or not ({@link #fillCacheWithoutMaxSize() }).
+     *
+     * @throws IOException
      */
     private void fillCache() throws IOException {
+        if (this.cacheSize != -1) {
+            this.fillCacheWithMaxSize();
+        } else {
+            this.fillCacheWithoutMaxSize();
+        }
+    }
+
+    /**
+     * Read as many lines as are needed to fill the cache completely, parse them
+     * and store them in cache. If the input file has fewer lines than the
+     * cache, lines will be read and parsed more than once. Only will be called
+     * if the cache has a maximum size.
+     *
+     * @throws IOException
+     */
+    private void fillCacheWithMaxSize() throws IOException {
         logger.log(Level.FINER, "Filling cache");
         for (int i = 0; i <= (this.cacheSize - this.cache.size()); i++) {
             String line = this.readLine();
@@ -133,6 +151,28 @@ public class CSVLoader {
             if (null != currentItem) {
                 this.cache.put(currentItem.OSM_ID, currentItem);
             }
+        }
+    }
+
+    /**
+     * Read lines and store them into the cache, until the input file is at EOF
+     * (or the memory is full and the whole thing breaks down).
+     *
+     * @throws IOException
+     */
+    private void fillCacheWithoutMaxSize() throws IOException {
+        if (this.cache.isEmpty()) {
+            logger.log(Level.FINER, "Filling endless cache");
+            String line = this.readLine();
+            while (null != line) {
+                CSVItem currentItem = this.parseCSVItem(line);
+                if (null != currentItem) {
+                    this.cache.put(currentItem.OSM_ID, currentItem);
+                }
+                line = this.readLine();
+            }
+            logger.log(Level.FINER, "Cache size: {0}", this.cache.size());
+            logger.log(Level.FINER, "Endless cache filled");
         }
     }
 
@@ -161,13 +201,30 @@ public class CSVLoader {
     }
 
     /**
+     * Reads a line from the input CSV. If the cache has no limit, it just reads
+     * a line or {@code null} if we are at EOF: {@link #readLineDumb() }). If
+     * the cache has a limit, it will start at the input file's beginning if it
+     * reached the bottom ({@link #readLineIntelligent() }).
+     *
+     * @return A line.
+     * @throws IOException
+     */
+    private String readLine() throws IOException {
+        if (-1 == this.cacheSize) {
+            return this.readLineDumb();
+        } else {
+            return this.readLineIntelligent();
+        }
+    }
+
+    /**
      * Reads a line from the input CSV and starts all over when reaching the
      * bottom.
      *
-     * @return
+     * @return A line.
      * @throws IOException If the file contains no lines at all.
      */
-    private String readLine() throws IOException {
+    private String readLineIntelligent() throws IOException {
         String line = this.bufferedReader.readLine();
         if (null == line) {
             this.resetReaders();
@@ -181,6 +238,15 @@ public class CSVLoader {
         this.lineNumber++;
         this.updateMark();
         return line;
+    }
+
+    /**
+     * Reads a line from the input file without starting all over.
+     * @return A line or {@code null} if we are at EOF.
+     * @throws IOException 
+     */
+    private String readLineDumb() throws IOException {
+        return this.bufferedReader.readLine();
     }
 
     /**
@@ -247,7 +313,7 @@ public class CSVLoader {
     /**
      * Try to find a {@link CSVItem} at the cache (cache-hit) and if it isn't
      * there, seek through the whole file. The cache will be cleared and
-     * re-filled when seeking.
+     * re-filled when seeking (only if its size is limited!).
      *
      * @param id The OSM id of the element to find.
      * @return The {@link CSVItem} with the matching id or {@code null} if it
@@ -264,7 +330,9 @@ public class CSVLoader {
         // Search the item
         logger.log(Level.FINEST, "Cache miss {0}", id);
         this.markLine();
-        while (null == item && !this.passedMark) {
+        // Only re-fill cache if it has a max size.
+        // But at the first time it will not be filled already.
+        while (null == item && !this.passedMark && (this.cacheSize != -1 || this.cache.isEmpty())) {
             this.cache.clear();
             this.fillCache();
             item = this.cache.get(id);
@@ -275,5 +343,13 @@ public class CSVLoader {
             logger.log(Level.FINEST, "Cache hit");
         }
         return item;    // null or the item
+    }
+
+    /**
+     * How many elements are in the cache?
+     * @return The elements in the cache.
+     */
+    public int getCacheEntries() {
+        return this.cache.size();
     }
 }

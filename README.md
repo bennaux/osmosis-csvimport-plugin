@@ -22,7 +22,8 @@ The task name for this plugin is `import-tag-from-csv`.
 - `maxDist`: Optional argument, only working whith `latPos` and `lonPos`: If given, there will be some action if the position of the CSV node and the OSM node differ more than `maxDist` meters. Defaults to `POSITIVE_INFINITY` (= feature switched off).
 - `maxDistAction`: The action that should be taken if a distance exceeds `maxDist`. There are three actions at the moment: `DELETE` prevents the import of the CSV item and screams, `WARN` just screams. `LOG` acts like `DELETE` but also writes the nodes, the positions and the distance into a file named after the input file (with added `-dirtyNodes` before the extension).
 - `inputCSV`: The path to the CSV file to import. CSV Lines starting with `;` will be ignored.
-- `csvCacheSize`: The size of the CSV lines cache.
+- `csvCacheSize`: The size of the CSV lines cache. This defaults to `-1` which makes the cache endless, and you really, really should not limit the cache's size unless your memory gives up, as limiting the cache makes the processing take hundreds of times longer time.
+- `progressInfoIntervalSecs`: When you specify a number `s` here, you will be given a short status information every `s` seconds.
 
 #### Example ####
 Imagine you have an OSM file `input.osm` with three nodes that have the ids `1`, `2` and `3`.
@@ -38,7 +39,10 @@ The following OSMOSIS call will bring you a file `output.osm` where the node wit
 
 ## Versions ##
 
-        v1.1: *Added the LOG action (issue #3).
+        v1.2: *Added the possibility to make the cache "endless" (issue #2).
+              *Added the progressInfoIntervalSecs option. 
+
+	    v1.1: *Added the LOG action (issue #3).
               *Added a small statistics output at the end of the plugin execution (issue #1). 
         
         v1.0: First version
